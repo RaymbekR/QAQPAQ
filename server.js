@@ -1,6 +1,6 @@
 // Крышка Battle — сервер (Express + Socket.IO). Физика мен ұпай тек серверде есептеледі.
 const express=require('express'),http=require('http'),{Server}=require('socket.io'),fs=require('fs');
-const app=express();app.use(express.static(__dirname+'/public'));
+const app=express();app.get('/',(q,r)=>r.sendFile(__dirname+'/index.html'));
 const srv=http.createServer(app),io=new Server(srv);
 const DB=__dirname+'/db.json';let db={};try{db=JSON.parse(fs.readFileSync(DB))}catch(e){}
 const save=()=>fs.writeFile(DB,JSON.stringify(db),()=>{});
