@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="kk"><head><meta charset="utf-8"><title>Крышка Battle</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<style>
+:root{--bg:#0b1020;--fg:#fff;--ac:#ffb300;--p:#1e2a52}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#app{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;overflow:auto;text-align:center;background:radial-gradient(circle at 50% 0,#1b3a7a,var(--bg) 70%)}
+h1{font-size:38px;margin:0;color:var(--ac);text-shadow:0 0 24px #ff6a00}h2{margin:0}
+.b{width:260px;max-width:90%;height:52px;border:0;border-radius:16px;background:var(--p);color:var(--fg);font-size:18px;font-weight:700;touch-action:manipulation}
+.b:active{filter:brightness(1.4)}.big,.on{background:linear-gradient(135deg,#ff6a00,#ffb300);color:#1a1000}
+.s{width:auto;height:34px;padding:0 12px;font-size:14px;margin-left:8px}
+input{width:260px;height:46px;border-radius:12px;border:2px solid var(--p);background:#0006;color:var(--fg);font-size:18px;text-align:center}
+.pl{display:flex;align-items:center;justify-content:center;width:280px;padding:6px;border-radius:12px;background:#ffffff14}
+.pl i{width:26px;height:26px;border-radius:50%;margin-right:8px}
+.av{font-size:30px;padding:4px;border-radius:12px}.av.on{background:#ffb30066}
+#game{position:absolute;inset:0;display:none}
+#hud{height:44px;display:flex;justify-content:space-between;align-items:center;padding:env(safe-area-inset-top,0) 16px 0;font-weight:700}
+#g{position:absolute;top:44px;left:0;right:0;bottom:120px}
+#ui{position:absolute;left:0;right:0;bottom:0;height:120px;display:flex;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+#ui .b{flex:1;width:auto;max-width:none;height:84px;font-size:30px;border-radius:20px;touch-action:none}
+#hit{flex:2!important;background:linear-gradient(135deg,#ff6a00,#ffb300);color:#1a1000;font-size:22px!important;position:relative;overflow:hidden}
+#pw{position:absolute;left:0;bottom:0;height:8px;width:0;background:#fff}
+#res{position:absolute;inset:0;display:none;background:#050814cc;z-index:5;align-items:center;justify-content:center;flex-direction:column;font-size:44px;font-weight:800;animation:pop .5s}
+@keyframes pop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+</style></head><body>
+<div id="app"></div>
+<div id="game">
+ <div id="hud"><span>Сен: <b id="sp">0</b></span><span id="md"></span><span>Қарсылас: <b id="sb">0</b></span></div>
+ <div id="g"></div>
+ <div id="ui"><button class="b" id="l">◀</button><button class="b" id="hit">СОҚ!<div id="pw"></div></button><button class="b" id="r">▶</button></div>
+ <div id="res"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const W=360,H=520,R=26,MN={'1v1':'1 vs 1',ffa:'Free For All','4v4':'4 vs 4',champ:'Чемпионат'},AV=['😎','🦊','🐺','🐯','🦁','🐲','🤖','👑'];
+const so=io(),A=document.getElementById('app'),$=id=>document.getElementById(id);
+let U,SK,rm,mode='1v1',G,snap,go,SP={},ang=-Math.PI/2,power=0;const held={l:0,r:0,hit:0};
+const tk=localStorage.kb_t||(localStorage.kb_t=Math.random().toString(36).slice(2)+Date.now().toString(36));
+so.on('connect',()=>so.emit('login',{token:tk,nick:'Ойыншы'+(100+Math.random()*900|0)},r=>{U=r.u;SK=r.skins;if(!go)menu()}));
+so.on('me',u=>U=u);so.on('err',m=>alert(m));
+const btn=(t,f,c='')=>`<button class="b ${c}" onclick="${f}">${t}</button>`;
+const hx=n=>n.toString(16).padStart(6,'0');
+function view(h){leaveGame();A.innerHTML=h;A.style.display='flex';}
+function menu(){view(`<h1>Крышка Battle</h1><p>${U.avatar} ${U.nick} · 🪙 ${U.coins}</p>`+btn('▶ Ойнау','modes()','big')+btn('🏆 Чемпионат',"quick('champ')")+btn('🛒 Дүкен','shop()')+btn('👤 Профиль','prof()')+btn('📊 Рейтинг','rank()'));}
+function modes(){view('<h2>Режим таңда</h2>'+Object.keys(MN).map(k=>btn(MN[k],`mode='${k}';modes()`,k==mode?'on':'')).join('')+btn('⚡ Тез ойын','quick(mode)','big')+btn('🏠 Бөлме ашу',"so.emit('create',{m:mode})")+'<input id="cd" maxlength="4" placeholder="Достың бөлме коды">'+btn('Қосылу',"so.emit('joinc',{c:$('cd').value.toUpperCase()})")+btn('← Артқа','menu()'));}
+const quick=m=>so.emit('quick',{m});
+so.on('room',r=>{rm=r;if(r.st==='lobby')lobby();});
+function lobby(){view(`<h2>Бөлме коды: ${rm.c}</h2><p>${MN[rm.m]} · ${rm.p.length}/${rm.n}<br>Достарыңа кодты жібер</p>`+rm.p.map(p=>`<div class="pl">${p.av} ${p.nick}</div>`).join('')+(rm.h===so.id?btn('▶ Бастау (бос орынға бот)',"so.emit('start')",'big'):'<p>Иесі бастағанша күт...</p>')+btn('Шығу',"so.emit('leave');menu()"));}
+function shop(){view(`<h2>Дүкен · 🪙 ${U.coins}</h2>`+Object.entries(SK).map(([k,s])=>{const own=U.skins.includes(k);return `<div class="pl"><i style="background:radial-gradient(#${hx(s.c[0])},#${hx(s.c[1])})"></i>${s.n} `+(own?(U.skin==k?' ✔':btn('Таңдау',`eq('${k}')`,'s')):btn('🪙'+s.p,`buy('${k}')`,'s'))+'</div>'}).join('')+btn('← Артқа','menu()'));}
+const buy=k=>so.emit('buy',k,r=>{r.u?U=r.u:alert(r.e);shop()});
+const eq=k=>so.emit('equip',k,r=>{U=r.u;shop()});
+function prof(){view(`<h2>Профиль</h2><div>${AV.map(a=>`<span class="av ${a==U.avatar?'on':''}" onclick="U.avatar='${a}';U.nick=$('nk').value;prof()">${a}</span>`).join('')}</div><input id="nk" maxlength="12" value="${U.nick}"><p>Жеңіс: ${U.wins} · Жеңіліс: ${U.losses}<br>Ұпай: ${U.score} · 🪙 ${U.coins}</p>`+btn('Сақтау',"so.emit('prof',{nick:$('nk').value,avatar:U.avatar},r=>{U=r;menu()})",'big')+btn('← Артқа','menu()'));}
+function rank(){so.emit('rank',l=>view('<h2>Рейтинг</h2>'+l.map((u,i)=>`<div class="pl">${i+1}. ${u.avatar} ${u.nick} — ${u.score}</div>`).join('')+btn('← Артқа','menu()')));}
+
+// ---- Ойын ----
+function bind(id,k){const e=$(id);
+ e.addEventListener('pointerdown',v=>{v.preventDefault();held[k]=1;e.setPointerCapture(v.pointerId)});
+ const up=()=>{if(held[k]&&k==='hit')fire();held[k]=0};e.addEventListener('pointerup',up);e.addEventListener('pointercancel',up);}
+bind('l','l');bind('r','r');bind('hit','hit');
+function fire(){const m=SP[so.id];if(m&&m.rdy)so.emit('shoot',{a:ang,p:power});power=0;}
+so.on('go',d=>{go=d;snap=null;ang=-Math.PI/2;power=0;A.style.display='none';$('game').style.display='block';$('res').style.display='none';
+ G=new Phaser.Game({type:Phaser.AUTO,parent:'g',width:W,height:H,backgroundColor:'#0b1020',scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:{create:cr,update:up}});});
+function leaveGame(){if(G){G.destroy(true);G=null}go=null;SP={};$('game').style.display='none';}
+function toast(t,ms){const r=$('res');r.textContent=t;r.style.display='flex';r.style.animation='none';r.offsetWidth;r.style.animation='';if(ms)setTimeout(()=>r.style.display='none',ms);}
+so.on('round',d=>toast(d.team===go.team?'✅ Раунд сенікі!':'❌ Раунд қарсыласта',1500));
+so.on('over',d=>toast(d.team===go.team?'🏆 Жеңдің! +10 🪙':'💥 Жеңілдің'));
+so.on('s',d=>{snap=d;if(!go)return;const t=go.team,o=Object.entries(d.sc).filter(([k])=>k!=t).map(e=>e[1]);
+ $('sp').textContent=d.sc[t]||0;$('sb').textContent=Math.max(0,...o);
+ $('md').textContent=MN[go.m]+(go.m==='champ'?' · Раунд '+(d.rw[t]||0)+':'+Math.max(0,...Object.entries(d.rw).filter(([k])=>k!=t).map(e=>e[1])):'');});
+function mk(sc,key,c){const g=sc.make.graphics({add:false});
+ g.fillStyle(c[1]).fillCircle(R,R,R);g.fillStyle(c[0]).fillCircle(R,R,R-4);
+ g.lineStyle(3,c[1]).strokeCircle(R,R,R-12);g.fillStyle(0xffffff,.4).fillCircle(R-9,R-9,7);g.generateTexture(key,2*R,2*R);}
+function cr(){SP={};const g=this.add.graphics();
+ g.fillStyle(0x14234d).fillRect(0,0,W,H);g.fillStyle(0x1b3a7a).fillRoundedRect(10,10,W-20,H-20,22);
+ g.lineStyle(3,0x4f86ff,.6).strokeRoundedRect(10,10,W-20,H-20,22);
+ g.lineStyle(2,0x4f86ff,.35).lineBetween(10,H/2,W-10,H/2).strokeCircle(W/2,H/2,60);
+ go.p.forEach(p=>{const k='sk_'+p.skin;if(!this.textures.exists(k))mk(this,k,SK[p.skin].c);
+  const s=this.add.image(W/2,H/2,k).setVisible(false),
+   col=go.teams?(p.team?0x4f86ff:0xff4040):0xffffff,
+   ring=this.add.circle(0,0,R+2).setStrokeStyle(p.id===so.id?4:2,col,.9),
+   t=this.add.text(0,0,p.nick,{fontSize:'10px',color:'#fff'}).setOrigin(.5);
+  SP[p.id]={s,ring,t,rdy:0,first:true};});
+ this.arrow=this.add.graphics().setDepth(5);}
+function up(t,dt){if(!snap)return;const d=dt/1000;
+ if(held.l)ang-=2.3*d;if(held.r)ang+=2.3*d;if(held.hit)power=Math.min(1,power+1.1*d);
+ $('pw').style.width=power*100+'%';
+ for(const [id,x,y,r] of snap.t){const o=SP[id];if(!o)continue;o.rdy=r;
+  if(o.first){o.s.setPosition(x,y).setVisible(true);o.first=false}else{o.s.x+=(x-o.s.x)*.4;o.s.y+=(y-o.s.y)*.4}
+  o.ring.setPosition(o.s.x,o.s.y);o.t.setPosition(o.s.x,o.s.y-R-10);}
+ const a=this.arrow;a.clear();const m=SP[so.id];
+ if(m&&m.rdy&&!m.first){const L=45+power*70,x=m.s.x,y=m.s.y,c=Math.cos(ang),s=Math.sin(ang);
+  a.lineStyle(5,0xffffff,.9).lineBetween(x+c*R,y+s*R,x+c*(R+L),y+s*(R+L));
+  a.fillStyle(0xffffff).fillTriangle(x+c*(R+L+12),y+s*(R+L+12),x+c*(R+L)-s*8,y+s*(R+L)+c*8,x+c*(R+L)+s*8,y+s*(R+L)-c*8);}}
+</script></body></html>
